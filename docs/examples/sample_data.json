@@ -1,0 +1,150 @@
+{
+  "current_input": {
+    "label": "Текущий расчёт",
+    "retrospective": 0.7,
+    "statistics": 0.733,
+    "expert": 0.35,
+    "weights": {
+      "retrospective": 0.3,
+      "statistics": 0.4,
+      "expert": 0.3
+    }
+  },
+  "current_result": {
+    "value": 0.608,
+    "interpretation": "Высокий уровень защищённости (можно сохранять текущую стратегию)",
+    "contribution_retrospective": 0.21,
+    "contribution_statistics": 0.293,
+    "contribution_expert": 0.105
+  },
+  "periods": [
+    {
+      "period_name": "2026-01",
+      "data": {
+        "label": "2026-01",
+        "retrospective": 0.6,
+        "statistics": 0.62,
+        "expert": 0.5,
+        "weights": {
+          "retrospective": 0.3,
+          "statistics": 0.5,
+          "expert": 0.2
+        }
+      },
+      "result": {
+        "value": 0.59,
+        "interpretation": "Удовлетворительный уровень (требуется внимание, мониторинг)",
+        "contribution_retrospective": 0.18,
+        "contribution_statistics": 0.31,
+        "contribution_expert": 0.1
+      }
+    },
+    {
+      "period_name": "2026-02",
+      "data": {
+        "label": "2026-02",
+        "retrospective": 0.65,
+        "statistics": 0.68,
+        "expert": 0.55,
+        "weights": {
+          "retrospective": 0.3,
+          "statistics": 0.5,
+          "expert": 0.2
+        }
+      },
+      "result": {
+        "value": 0.645,
+        "interpretation": "Высокий уровень защищённости (можно сохранять текущую стратегию)",
+        "contribution_retrospective": 0.195,
+        "contribution_statistics": 0.34,
+        "contribution_expert": 0.11
+      }
+    },
+    {
+      "period_name": "2026-03",
+      "data": {
+        "label": "2026-03",
+        "retrospective": 0.7,
+        "statistics": 0.733,
+        "expert": 0.35,
+        "weights": {
+          "retrospective": 0.3,
+          "statistics": 0.4,
+          "expert": 0.3
+        }
+      },
+      "result": {
+        "value": 0.608,
+        "interpretation": "Высокий уровень защищённости (можно сохранять текущую стратегию)",
+        "contribution_retrospective": 0.21,
+        "contribution_statistics": 0.293,
+        "contribution_expert": 0.105
+      }
+    }
+  ],
+  "scenarios": [
+    {
+      "scenario_name": "Сценарий I",
+      "data": {
+        "label": "Сценарий I",
+        "retrospective": 0.7,
+        "statistics": 0.733,
+        "expert": 0.35,
+        "weights": {
+          "retrospective": 0.3,
+          "statistics": 0.4,
+          "expert": 0.3
+        }
+      },
+      "result": {
+        "value": 0.608,
+        "interpretation": "Высокий уровень защищённости (можно сохранять текущую стратегию)",
+        "contribution_retrospective": 0.21,
+        "contribution_statistics": 0.293,
+        "contribution_expert": 0.105
+      }
+    },
+    {
+      "scenario_name": "Сценарий II",
+      "data": {
+        "label": "Сценарий II",
+        "retrospective": 0.8,
+        "statistics": 0.0,
+        "expert": 0.4,
+        "weights": {
+          "retrospective": 0.2,
+          "statistics": 0.6,
+          "expert": 0.2
+        }
+      },
+      "result": {
+        "value": 0.24,
+        "interpretation": "Повышенный риск (требуется немедленное вмешательство)",
+        "contribution_retrospective": 0.16,
+        "contribution_statistics": 0.0,
+        "contribution_expert": 0.08
+      }
+    },
+    {
+      "scenario_name": "Сценарий III",
+      "data": {
+        "label": "Сценарий III",
+        "retrospective": 0.3,
+        "statistics": 0.5,
+        "expert": 0.8,
+        "weights": {
+          "retrospective": 0.4,
+          "statistics": 0.3,
+          "expert": 0.3
+        }
+      },
+      "result": {
+        "value": 0.51,
+        "interpretation": "Удовлетворительный уровень (требуется внимание, мониторинг)",
+        "contribution_retrospective": 0.12,
+        "contribution_statistics": 0.15,
+        "contribution_expert": 0.24
+      }
+    }
+  ]
+}
