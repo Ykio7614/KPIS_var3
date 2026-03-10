@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import base64
+from io import BytesIO
 from datetime import datetime
 from pathlib import Path
 
+from app.domain.formulas.ipur import HIGH_TEXT, LOW_TEXT, MEDIUM_TEXT
 from app.models.entities import AppState
 
 
@@ -14,6 +17,7 @@ class ReportService:
 
     def _build_html(self, state: AppState) -> str:
         timestamp = datetime.now().strftime("%d.%m.%Y %H:%M")
+        charts_html = self._charts_block(state)
         current_table = ""
         summary = "<p>Текущий расчёт отсутствует.</p>"
         if state.current_input and state.current_result:
@@ -81,6 +85,8 @@ class ReportService:
     th, td {{ border: 1px solid #cbd5e1; padding: 8px; text-align: left; }}
     th {{ background: #e2e8f0; }}
     .meta {{ color: #475569; margin-bottom: 16px; }}
+    .chart {{ margin-bottom: 24px; }}
+    .chart img {{ max-width: 100%; border: 1px solid #cbd5e1; }}
   </style>
 </head>
 <body>
@@ -89,6 +95,8 @@ class ReportService:
   <h2>Текущий результат</h2>
   {summary}
   {current_table}
+  <h2>Графики</h2>
+  {charts_html}
   <h2>Периоды</h2>
   {periods_table}
   <h2>Сценарии</h2>
@@ -106,3 +114,114 @@ class ReportService:
             cells = "".join(f"<td>{cell}</td>" for cell in row)
             row_html.append(f"<tr>{cells}</tr>")
         return f"<table><thead><tr>{head_html}</tr></thead><tbody>{''.join(row_html)}</tbody></table>"
+
+    def _charts_block(self, state: AppState) -> str:
+        charts = [
+            ("Вклад компонентов и итоговый ИПУР", self._build_current_chart(state)),
+            ("Динамика ИПУР по периодам", self._build_periods_chart(state)),
+            ("Сравнение сценариев", self._build_scenarios_chart(state)),
+        ]
+        return "".join(
+            f'<div class="chart"><h3>{title}</h3><img alt="{title}" src="data:image/png;base64,{image}"></div>'
+            for title, image in charts
+        )
+
+    def _build_current_chart(self, state: AppState) -> str:
+        figure = self._create_figure()
+        axis = figure.subplots()
+        axis.set_title("Вклад компонентов и итоговый ИПУР")
+        self._style_axis(axis)
+
+        if state.current_result is None:
+            self._empty_axis(axis, "Выполните расчёт, чтобы увидеть вклад компонентов.")
+            return self._figure_to_base64(figure)
+
+        bars = [
+            state.current_result.contribution_retrospective,
+            state.current_result.contribution_statistics,
+            state.current_result.contribution_expert,
+            state.current_result.value,
+        ]
+        labels = ["R", "S", "E", "I"]
+        colors = ["#3b82f6", "#0ea5e9", "#8b5cf6", self._result_color(state.current_result.interpretation)]
+        axis.bar(labels, bars, color=colors)
+        axis.grid(axis="y", alpha=0.3)
+        for index, value in enumerate(bars):
+            axis.text(index, value + 0.02, f"{value:.2f}", ha="center", va="bottom", fontsize=9)
+        figure.tight_layout()
+        return self._figure_to_base64(figure)
+
+    def _build_periods_chart(self, state: AppState) -> str:
+        figure = self._create_figure()
+        axis = figure.subplots()
+        axis.set_title("Динамика ИПУР по периодам")
+        self._style_axis(axis)
+
+        if not state.periods:
+            self._empty_axis(axis, "Добавьте хотя бы один период.")
+            return self._figure_to_base64(figure)
+
+        axis.plot(
+            [item.period_name for item in state.periods],
+            [item.result.value for item in state.periods],
+            marker="o",
+            color="#2563eb",
+        )
+        axis.grid(alpha=0.3)
+        axis.tick_params(axis="x", rotation=25)
+        figure.tight_layout()
+        return self._figure_to_base64(figure)
+
+    def _build_scenarios_chart(self, state: AppState) -> str:
+        figure = self._create_figure()
+        axis = figure.subplots()
+        axis.set_title("Сравнение сценариев")
+        self._style_axis(axis)
+
+        if not state.scenarios:
+            self._empty_axis(axis, "Добавьте 2-3 сценария для сравнения.")
+            return self._figure_to_base64(figure)
+
+        axis.bar(
+            [item.scenario_name for item in state.scenarios],
+            [item.result.value for item in state.scenarios],
+            color=[self._result_color(item.result.interpretation) for item in state.scenarios],
+        )
+        axis.grid(axis="y", alpha=0.3)
+        axis.tick_params(axis="x", rotation=15)
+        figure.tight_layout()
+        return self._figure_to_base64(figure)
+
+    def _style_axis(self, axis) -> None:
+        axis.set_ylim(0, 1)
+        axis.axhspan(0.6, 1.0, alpha=0.1, color="green")
+        axis.axhspan(0.4, 0.6, alpha=0.1, color="yellow")
+        axis.axhspan(0.0, 0.4, alpha=0.1, color="red")
+        axis.axhline(y=0.6, color="green", linestyle="--", alpha=0.5, linewidth=1)
+        axis.axhline(y=0.4, color="orange", linestyle="--", alpha=0.5, linewidth=1)
+
+    def _empty_axis(self, axis, text: str) -> None:
+        axis.set_xticks([])
+        axis.set_yticks([0, 0.5, 1.0])
+        axis.grid(axis="y", alpha=0.2)
+        axis.text(0.5, 0.5, text, transform=axis.transAxes, ha="center", va="center")
+
+    def _create_figure(self):
+        from matplotlib.figure import Figure
+
+        return Figure(figsize=(8, 3), dpi=120)
+
+    def _figure_to_base64(self, figure) -> str:
+        buffer = BytesIO()
+        figure.savefig(buffer, format="png", bbox_inches="tight")
+        buffer.seek(0)
+        return base64.b64encode(buffer.read()).decode("ascii")
+
+    def _result_color(self, interpretation: str) -> str:
+        if interpretation == HIGH_TEXT:
+            return "#16a34a"
+        if interpretation == MEDIUM_TEXT:
+            return "#eab308"
+        if interpretation == LOW_TEXT:
+            return "#dc2626"
+        return "#64748b"
