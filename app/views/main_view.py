@@ -19,12 +19,21 @@ class MainView:
         self.root.minsize(1200, 800)
 
         self.preset_var = tk.StringVar(value="Стандартный")
+
         self.r_var = tk.StringVar(value="0.70")
         self.s_var = tk.StringVar(value="0.73")
         self.e_var = tk.StringVar(value="0.35")
         self.ar_var = tk.StringVar(value="0.30")
         self.as_var = tk.StringVar(value="0.50")
         self.ae_var = tk.StringVar(value="0.20")
+
+        self.r_scale_var = tk.DoubleVar(value=0.70)
+        self.s_scale_var = tk.DoubleVar(value=0.73)
+        self.e_scale_var = tk.DoubleVar(value=0.35)
+        self.ar_scale_var = tk.DoubleVar(value=0.30)
+        self.as_scale_var = tk.DoubleVar(value=0.50)
+        self.ae_scale_var = tk.DoubleVar(value=0.20)
+
         self.period_name_var = tk.StringVar(value="2026-03")
         self.scenario_name_var = tk.StringVar(value="Без изменений")
         self.result_var = tk.StringVar(value="I = -")
@@ -51,6 +60,7 @@ class MainView:
     def _build_controls(self, parent: ttk.Frame) -> None:
         input_frame = ttk.LabelFrame(parent, text="Ввод данных", padding=10)
         input_frame.grid(row=0, column=0, sticky="new")
+        input_frame.columnconfigure(1, weight=1)
 
         ttk.Label(input_frame, text="Режим весов").grid(row=0, column=0, sticky="w", pady=4)
         self.preset_combo = ttk.Combobox(
@@ -60,43 +70,67 @@ class MainView:
             state="readonly",
             width=18,
         )
-        self.preset_combo.grid(row=0, column=1, sticky="ew", pady=4)
-        self.apply_preset_button = ttk.Button(input_frame, text="Применить")
+        self.preset_combo.grid(row=0, column=1, sticky="w", pady=4)
+        self.apply_preset_button = ttk.Button(input_frame, text="Применить", command=self._apply_preset)
         self.apply_preset_button.grid(row=0, column=2, padx=(6, 0), pady=4)
 
+        def create_slider_with_entry(row, label, text_var, scale_var):
+            ttk.Label(input_frame, text=f"{label} (0..1)").grid(row=row, column=0, sticky="w", pady=4)
+
+            slider_frame = ttk.Frame(input_frame)
+            slider_frame.grid(row=row, column=1, columnspan=2, sticky="ew", pady=4, padx=(0, 5))
+            slider_frame.columnconfigure(0, weight=1)
+
+            scale = ttk.Scale(slider_frame, from_=0, to=1, orient=tk.HORIZONTAL,variable=scale_var, length=200)
+            scale.grid(row=0, column=0, sticky="ew", padx=(0, 10))
+
+            entry = ttk.Entry(slider_frame, textvariable=text_var, width=6, justify="right")
+            entry.grid(row=0, column=1)
+
+            def update_from_scale(*args):
+                text_var.set(f"{scale_var.get():.2f}")
+
+            def update_from_entry(*args):
+                try:
+                    val = float(text_var.get())
+                    if 0 <= val <= 1:
+                        scale_var.set(val)
+                    else:
+                        text_var.set(f"{scale_var.get():.2f}")
+                except ValueError:
+                    text_var.set(f"{scale_var.get():.2f}")
+
+            scale_var.trace_add('write', update_from_scale)
+            text_var.trace_add('write', update_from_entry)
+
+            entry.bind('<FocusOut>', lambda e: update_from_entry())
+            entry.bind('<Return>', lambda e: update_from_entry())
+
+            scale_var.set(float(text_var.get()))
+
         rows = [
-            ("R", self.r_var),
-            ("S", self.s_var),
-            ("E", self.e_var),
-            ("aR", self.ar_var),
-            ("aS", self.as_var),
-            ("aE", self.ae_var),
+            (1, "R", self.r_var, self.r_scale_var),
+            (2, "S", self.s_var, self.s_scale_var),
+            (3, "E", self.e_var, self.e_scale_var),
+            (4, "aR", self.ar_var, self.ar_scale_var),
+            (5, "aS", self.as_var, self.as_scale_var),
+            (6, "aE", self.ae_var, self.ae_scale_var),
         ]
-        for index, (label, variable) in enumerate(rows, start=1):
-            ttk.Label(input_frame, text=f"{label} (0..1)").grid(row=index, column=0, sticky="w", pady=4)
-            spin = tk.Spinbox(
-                input_frame,
-                from_=0.0,
-                to=1.0,
-                increment=0.01,
-                textvariable=variable,
-                width=8,
-                justify="right",
-                format="%.2f",
-            )
-            spin.grid(row=index, column=1, sticky="w", pady=4)
+
+        for row, label, text_var, scale_var in rows:
+            create_slider_with_entry(row, label, text_var, scale_var)
 
         ttk.Label(input_frame, text="Период").grid(row=7, column=0, sticky="w", pady=(10, 4))
-        ttk.Entry(input_frame, textvariable=self.period_name_var, width=20).grid(
-            row=7, column=1, columnspan=2, sticky="ew", pady=(10, 4)
-        )
+        period_entry = ttk.Entry(input_frame, textvariable=self.period_name_var, width=20)
+        period_entry.grid(row=7, column=1, columnspan=2, sticky="w", pady=(10, 4))
+
         ttk.Label(input_frame, text="Сценарий").grid(row=8, column=0, sticky="w", pady=4)
-        ttk.Entry(input_frame, textvariable=self.scenario_name_var, width=20).grid(
-            row=8, column=1, columnspan=2, sticky="ew", pady=4
-        )
+        scenario_entry = ttk.Entry(input_frame, textvariable=self.scenario_name_var, width=20)
+        scenario_entry.grid(row=8, column=1, columnspan=2, sticky="w", pady=4)
 
         action_frame = ttk.LabelFrame(parent, text="Действия", padding=10)
         action_frame.grid(row=1, column=0, sticky="new", pady=(10, 0))
+        action_frame.columnconfigure(0, weight=1)
 
         self.calculate_button = ttk.Button(action_frame, text="Рассчитать")
         self.calculate_button.grid(row=0, column=0, sticky="ew", pady=3)
@@ -109,6 +143,7 @@ class MainView:
 
         storage_frame = ttk.LabelFrame(parent, text="Файлы", padding=10)
         storage_frame.grid(row=2, column=0, sticky="new", pady=(10, 0))
+        storage_frame.columnconfigure(0, weight=1)
 
         self.load_button = ttk.Button(storage_frame, text="Загрузить JSON/CSV")
         self.load_button.grid(row=0, column=0, sticky="ew", pady=3)
@@ -121,6 +156,8 @@ class MainView:
 
         result_frame = ttk.LabelFrame(parent, text="Результат", padding=10)
         result_frame.grid(row=3, column=0, sticky="new", pady=(10, 0))
+        result_frame.columnconfigure(0, weight=1)
+
         ttk.Label(result_frame, textvariable=self.result_var, font=("Arial", 16, "bold")).grid(
             row=0, column=0, sticky="w"
         )
@@ -205,20 +242,36 @@ class MainView:
         }
 
     def set_weights(self, retrospective: float, statistics: float, expert: float) -> None:
+
         self.ar_var.set(f"{retrospective:.2f}")
         self.as_var.set(f"{statistics:.2f}")
         self.ae_var.set(f"{expert:.2f}")
 
+        self.ar_scale_var.set(retrospective)
+        self.as_scale_var.set(statistics)
+        self.ae_scale_var.set(expert)
+
     def set_input_values(self, data: IndicatorInput) -> None:
         self.r_var.set(f"{data.retrospective:.2f}")
+        self.r_scale_var.set(data.retrospective)
+
         self.s_var.set(f"{data.statistics:.2f}")
+        self.s_scale_var.set(data.statistics)
+
         self.e_var.set(f"{data.expert:.2f}")
+        self.e_scale_var.set(data.expert)
+
         self.set_weights(
             data.weights.retrospective,
             data.weights.statistics,
             data.weights.expert,
         )
 
+    def _apply_preset(self) -> None:
+        preset_name = self.preset_var.get()
+        if preset_name in WEIGHT_PRESETS:
+            wr, ws, we = WEIGHT_PRESETS[preset_name]
+            self.set_weights(wr, ws, we)
     def set_result(self, result: CalculationResult | None) -> None:
         if result is None:
             self.result_var.set("I = -")
@@ -286,8 +339,16 @@ class MainView:
         self.figure.subplots_adjust(hspace=0.6, left=0.08, right=0.98, top=0.96, bottom=0.06)
 
         current_axis, periods_axis, scenarios_axis = axes
+
         current_axis.set_title("Вклад компонентов и итоговый ИПУР")
         current_axis.set_ylim(0, 1)
+
+        current_axis.axhspan(0.6, 1.0, alpha=0.1, color='green', label='Высокий уровень')
+        current_axis.axhspan(0.4, 0.6, alpha=0.1, color='yellow', label='Средний уровень')
+        current_axis.axhspan(0, 0.4, alpha=0.1, color='red', label='Низкий уровень')
+
+        current_axis.axhline(y=0.6, color='green', linestyle='--', alpha=0.5, linewidth=1)
+        current_axis.axhline(y=0.4, color='orange', linestyle='--', alpha=0.5, linewidth=1)
 
         if current_result is None:
             self._empty_axis(current_axis, "Выполните расчёт, чтобы увидеть вклад компонентов.")
@@ -303,34 +364,73 @@ class MainView:
             current_axis.bar(labels, bars, color=colors)
             current_axis.grid(axis="y", alpha=0.3)
 
+            for i, (bar, val) in enumerate(zip(bars, bars)):
+                current_axis.text(i, val + 0.02, f'{val:.2f}', ha='center', va='bottom', fontsize=9)
+
+        current_axis.legend(loc='upper right', fontsize=8)
+
+        # График 2: Динамика по периодам
         periods_axis.set_title("Динамика ИПУР по периодам")
         periods_axis.set_ylim(0, 1)
+
+        periods_axis.axhspan(0.6, 1.0, alpha=0.1, color='green')
+        periods_axis.axhspan(0.4, 0.6, alpha=0.1, color='yellow')
+        periods_axis.axhspan(0, 0.4, alpha=0.1, color='red')
+
+        periods_axis.axhline(y=0.6, color='green', linestyle='--', alpha=0.5, linewidth=1,label='Высокий уровень (≥0.6)')
+        periods_axis.axhline(y=0.4, color='orange', linestyle='--', alpha=0.5, linewidth=1,label='Средний уровень (0.4-0.6)')
+        periods_axis.axhline(y=0.4, color='red', linestyle='--', alpha=0.5, linewidth=1,label='Низкий уровень (<0.4)')
+
         if not periods:
             self._empty_axis(periods_axis, "Добавьте хотя бы один период.")
         else:
-            periods_axis.plot(
-                [item.period_name for item in periods],
-                [item.result.value for item in periods],
-                marker="o",
-                color="#2563eb",
-            )
+            x_values = range(len(periods))
+            y_values = [item.result.value for item in periods]
+
+            periods_axis.plot(x_values, y_values, marker="o", color="#2563eb", linewidth=2, markersize=8)
+            periods_axis.set_xticks(x_values)
+            periods_axis.set_xticklabels([item.period_name for item in periods], rotation=25, ha='right')
             periods_axis.grid(alpha=0.3)
-            periods_axis.tick_params(axis="x", rotation=25)
+
+            for i, (x, y) in enumerate(zip(x_values, y_values)):
+                periods_axis.annotate(f'{y:.3f}', (x, y), textcoords="offset points",xytext=(0, 10), ha='center', fontsize=8)
+
+        periods_axis.legend(loc='upper right', fontsize=8)
 
         scenarios_axis.set_title("Сравнение сценариев")
         scenarios_axis.set_ylim(0, 1)
+
+        scenarios_axis.axhspan(0.6, 1.0, alpha=0.1, color='green')
+        scenarios_axis.axhspan(0.4, 0.6, alpha=0.1, color='yellow')
+        scenarios_axis.axhspan(0, 0.4, alpha=0.1, color='red')
+
+        scenarios_axis.axhline(y=0.6, color='green', linestyle='--', alpha=0.5, linewidth=1)
+        scenarios_axis.axhline(y=0.4, color='orange', linestyle='--', alpha=0.5, linewidth=1)
+
         if not scenarios:
             self._empty_axis(scenarios_axis, "Добавьте 2-3 сценария для сравнения.")
         else:
+            x_values = range(len(scenarios))
+            scenario_names = [item.scenario_name for item in scenarios]
             scenario_values = [item.result.value for item in scenarios]
             scenario_colors = [self._result_color(item.result.interpretation) for item in scenarios]
-            scenarios_axis.bar(
-                [item.scenario_name for item in scenarios],
-                scenario_values,
-                color=scenario_colors,
-            )
+
+            bars = scenarios_axis.bar(x_values, scenario_values, color=scenario_colors, alpha=0.8)
+            scenarios_axis.set_xticks(x_values)
+            scenarios_axis.set_xticklabels(scenario_names, rotation=15, ha='right')
             scenarios_axis.grid(axis="y", alpha=0.3)
-            scenarios_axis.tick_params(axis="x", rotation=15)
+
+            for bar, val in zip(bars, scenario_values):
+                height = bar.get_height()
+                scenarios_axis.text(bar.get_x() + bar.get_width() / 2., height + 0.02,f'{val:.3f}', ha='center', va='bottom', fontsize=9)
+
+        from matplotlib.patches import Patch
+        legend_elements = [
+            Patch(facecolor='green', alpha=0.1, label='Высокий уровень (≥0.6)'),
+            Patch(facecolor='yellow', alpha=0.1, label='Средний уровень (0.4-0.6)'),
+            Patch(facecolor='red', alpha=0.1, label='Низкий уровень (<0.4)')
+        ]
+        scenarios_axis.legend(handles=legend_elements, loc='upper right', fontsize=8)
 
         self.canvas.draw_idle()
 
