@@ -33,6 +33,18 @@ class MainView:
         self.ar_scale_var = tk.DoubleVar(value=0.30)
         self.as_scale_var = tk.DoubleVar(value=0.50)
         self.ae_scale_var = tk.DoubleVar(value=0.20)
+        self._weight_sync_in_progress = False
+        self._weight_keys = ("aR", "aS", "aE")
+        self._weight_scale_vars = {
+            "aR": self.ar_scale_var,
+            "aS": self.as_scale_var,
+            "aE": self.ae_scale_var,
+        }
+        self._weight_text_vars = {
+            "aR": self.ar_var,
+            "aS": self.as_var,
+            "aE": self.ae_var,
+        }
 
         self.period_name_var = tk.StringVar(value="2026-03")
         self.scenario_name_var = tk.StringVar(value="Без изменений")
@@ -86,15 +98,28 @@ class MainView:
 
             entry = ttk.Entry(slider_frame, textvariable=text_var, width=6, justify="right")
             entry.grid(row=0, column=1)
+            is_weight = label in self._weight_keys
 
             def update_from_scale(*args):
+                if self._weight_sync_in_progress:
+                    return
+                if is_weight:
+                    self._set_weight_values(label, scale_var.get())
+                    self.preset_var.set("Ручной")
+                    return
                 text_var.set(f"{scale_var.get():.2f}")
 
             def update_from_entry(*args):
+                if self._weight_sync_in_progress:
+                    return
                 try:
                     val = float(text_var.get())
                     if 0 <= val <= 1:
-                        scale_var.set(val)
+                        if is_weight:
+                            self._set_weight_values(label, val)
+                            self.preset_var.set("Ручной")
+                        else:
+                            scale_var.set(val)
                     else:
                         text_var.set(f"{scale_var.get():.2f}")
                 except ValueError:
@@ -153,6 +178,8 @@ class MainView:
         self.export_csv_button.grid(row=2, column=0, sticky="ew", pady=3)
         self.export_html_button = ttk.Button(storage_frame, text="Экспорт HTML")
         self.export_html_button.grid(row=3, column=0, sticky="ew", pady=3)
+        self.export_pdf_button = ttk.Button(storage_frame, text="Экспорт PDF")
+        self.export_pdf_button.grid(row=4, column=0, sticky="ew", pady=3)
 
         result_frame = ttk.LabelFrame(parent, text="Результат", padding=10)
         result_frame.grid(row=3, column=0, sticky="new", pady=(10, 0))
@@ -227,6 +254,7 @@ class MainView:
         self.save_json_button.configure(command=callbacks["save_json"])
         self.export_csv_button.configure(command=callbacks["export_csv"])
         self.export_html_button.configure(command=callbacks["export_html"])
+        self.export_pdf_button.configure(command=callbacks["export_pdf"])
 
     def get_form_data(self) -> dict[str, str]:
         return {
@@ -242,14 +270,17 @@ class MainView:
         }
 
     def set_weights(self, retrospective: float, statistics: float, expert: float) -> None:
+        self._weight_sync_in_progress = True
+        try:
+            self.ar_var.set(f"{retrospective:.2f}")
+            self.as_var.set(f"{statistics:.2f}")
+            self.ae_var.set(f"{expert:.2f}")
 
-        self.ar_var.set(f"{retrospective:.2f}")
-        self.as_var.set(f"{statistics:.2f}")
-        self.ae_var.set(f"{expert:.2f}")
-
-        self.ar_scale_var.set(retrospective)
-        self.as_scale_var.set(statistics)
-        self.ae_scale_var.set(expert)
+            self.ar_scale_var.set(retrospective)
+            self.as_scale_var.set(statistics)
+            self.ae_scale_var.set(expert)
+        finally:
+            self._weight_sync_in_progress = False
 
     def set_input_values(self, data: IndicatorInput) -> None:
         self.r_var.set(f"{data.retrospective:.2f}")
@@ -272,6 +303,38 @@ class MainView:
         if preset_name in WEIGHT_PRESETS:
             wr, ws, we = WEIGHT_PRESETS[preset_name]
             self.set_weights(wr, ws, we)
+
+    def _set_weight_values(self, active_key: str, active_value: float) -> None:
+        active_value = min(max(round(active_value, 2), 0.0), 1.0)
+        other_keys = [key for key in self._weight_keys if key != active_key]
+        other_values = [self._weight_scale_vars[key].get() for key in other_keys]
+        current_other_sum = sum(other_values)
+        total_sum = round(active_value + current_other_sum, 2)
+
+        if total_sum <= 1.0:
+            scaled_values = [round(value, 2) for value in other_values]
+        else:
+            remaining = max(0.0, round(1.0 - active_value, 2))
+            if current_other_sum > 0:
+                scaled_values = [round(value * remaining / current_other_sum, 2) for value in other_values]
+            else:
+                scaled_values = [0.0 for _ in other_keys]
+
+            correction = round(remaining - sum(scaled_values), 2)
+            if scaled_values:
+                scaled_values[-1] = round(scaled_values[-1] + correction, 2)
+
+        self._weight_sync_in_progress = True
+        try:
+            self._weight_scale_vars[active_key].set(active_value)
+            self._weight_text_vars[active_key].set(f"{active_value:.2f}")
+            for key, value in zip(other_keys, scaled_values):
+                normalized_value = min(max(round(value, 2), 0.0), 1.0)
+                self._weight_scale_vars[key].set(normalized_value)
+                self._weight_text_vars[key].set(f"{normalized_value:.2f}")
+        finally:
+            self._weight_sync_in_progress = False
+
     def set_result(self, result: CalculationResult | None) -> None:
         if result is None:
             self.result_var.set("I = -")
@@ -480,6 +543,13 @@ class MainView:
             title="Экспорт отчёта в HTML",
             defaultextension=".html",
             filetypes=[("HTML", "*.html")],
+        )
+
+    def ask_save_pdf_path(self) -> str:
+        return filedialog.asksaveasfilename(
+            title="Экспорт отчёта в PDF",
+            defaultextension=".pdf",
+            filetypes=[("PDF", "*.pdf")],
         )
 
     def show_error(self, message: str) -> None:

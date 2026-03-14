@@ -48,6 +48,18 @@ class ImportExportTests(unittest.TestCase):
         self.assertIn("Динамика ИПУР по периодам", html)
         self.assertIn("Сравнение сценариев", html)
 
+    @unittest.skipUnless(importlib.util.find_spec("matplotlib"), "matplotlib не установлен")
+    def test_pdf_report_is_created(self) -> None:
+        state = ImportExportService(FileRepository()).load_state("docs/examples/sample_data.json")
+        report_service = ReportService()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            out_path = Path(temp_dir) / "report.pdf"
+            report_service.export_pdf(str(out_path), state)
+
+            self.assertTrue(out_path.exists())
+            self.assertGreater(out_path.stat().st_size, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

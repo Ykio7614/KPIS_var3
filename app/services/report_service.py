@@ -15,6 +15,30 @@ class ReportService:
         html = self._build_html(state)
         file_path.write_text(html, encoding="utf-8")
 
+    def export_pdf(self, path: str, state: AppState) -> None:
+        from matplotlib.backends.backend_pdf import PdfPages
+
+        file_path = Path(path)
+        with PdfPages(file_path) as pdf:
+            pdf.savefig(self._build_summary_page(state))
+            pdf.savefig(
+                self._build_table_figure(
+                    title="Периоды",
+                    headers=["Период", "R", "S", "E", "aR", "aS", "aE", "I", "Интерпретация"],
+                    rows=self._period_rows(state),
+                )
+            )
+            pdf.savefig(
+                self._build_table_figure(
+                    title="Сценарии",
+                    headers=["Сценарий", "R", "S", "E", "aR", "aS", "aE", "I", "Интерпретация"],
+                    rows=self._scenario_rows(state),
+                )
+            )
+            pdf.savefig(self._build_current_chart_figure(state))
+            pdf.savefig(self._build_periods_chart_figure(state))
+            pdf.savefig(self._build_scenarios_chart_figure(state))
+
     def _build_html(self, state: AppState) -> str:
         timestamp = datetime.now().strftime("%d.%m.%Y %H:%M")
         charts_html = self._charts_block(state)
@@ -41,37 +65,11 @@ class ReportService:
 
         periods_table = self._table(
             headers=["Период", "R", "S", "E", "aR", "aS", "aE", "I", "Интерпретация"],
-            rows=[
-                [
-                    item.period_name,
-                    item.data.retrospective,
-                    item.data.statistics,
-                    item.data.expert,
-                    item.data.weights.retrospective,
-                    item.data.weights.statistics,
-                    item.data.weights.expert,
-                    item.result.value,
-                    item.result.interpretation,
-                ]
-                for item in state.periods
-            ],
+            rows=self._period_rows(state),
         )
         scenarios_table = self._table(
             headers=["Сценарий", "R", "S", "E", "aR", "aS", "aE", "I", "Интерпретация"],
-            rows=[
-                [
-                    item.scenario_name,
-                    item.data.retrospective,
-                    item.data.statistics,
-                    item.data.expert,
-                    item.data.weights.retrospective,
-                    item.data.weights.statistics,
-                    item.data.weights.expert,
-                    item.result.value,
-                    item.result.interpretation,
-                ]
-                for item in state.scenarios
-            ],
+            rows=self._scenario_rows(state),
         )
         return f"""<!doctype html>
 <html lang="ru">
@@ -127,6 +125,18 @@ class ReportService:
         )
 
     def _build_current_chart(self, state: AppState) -> str:
+        figure = self._build_current_chart_figure(state)
+        return self._figure_to_base64(figure)
+
+    def _build_periods_chart(self, state: AppState) -> str:
+        figure = self._build_periods_chart_figure(state)
+        return self._figure_to_base64(figure)
+
+    def _build_scenarios_chart(self, state: AppState) -> str:
+        figure = self._build_scenarios_chart_figure(state)
+        return self._figure_to_base64(figure)
+
+    def _build_current_chart_figure(self, state: AppState):
         figure = self._create_figure()
         axis = figure.subplots()
         axis.set_title("Вклад компонентов и итоговый ИПУР")
@@ -134,7 +144,8 @@ class ReportService:
 
         if state.current_result is None:
             self._empty_axis(axis, "Выполните расчёт, чтобы увидеть вклад компонентов.")
-            return self._figure_to_base64(figure)
+            figure.tight_layout()
+            return figure
 
         bars = [
             state.current_result.contribution_retrospective,
@@ -149,9 +160,9 @@ class ReportService:
         for index, value in enumerate(bars):
             axis.text(index, value + 0.02, f"{value:.2f}", ha="center", va="bottom", fontsize=9)
         figure.tight_layout()
-        return self._figure_to_base64(figure)
+        return figure
 
-    def _build_periods_chart(self, state: AppState) -> str:
+    def _build_periods_chart_figure(self, state: AppState):
         figure = self._create_figure()
         axis = figure.subplots()
         axis.set_title("Динамика ИПУР по периодам")
@@ -159,7 +170,8 @@ class ReportService:
 
         if not state.periods:
             self._empty_axis(axis, "Добавьте хотя бы один период.")
-            return self._figure_to_base64(figure)
+            figure.tight_layout()
+            return figure
 
         axis.plot(
             [item.period_name for item in state.periods],
@@ -170,9 +182,9 @@ class ReportService:
         axis.grid(alpha=0.3)
         axis.tick_params(axis="x", rotation=25)
         figure.tight_layout()
-        return self._figure_to_base64(figure)
+        return figure
 
-    def _build_scenarios_chart(self, state: AppState) -> str:
+    def _build_scenarios_chart_figure(self, state: AppState):
         figure = self._create_figure()
         axis = figure.subplots()
         axis.set_title("Сравнение сценариев")
@@ -180,7 +192,8 @@ class ReportService:
 
         if not state.scenarios:
             self._empty_axis(axis, "Добавьте 2-3 сценария для сравнения.")
-            return self._figure_to_base64(figure)
+            figure.tight_layout()
+            return figure
 
         axis.bar(
             [item.scenario_name for item in state.scenarios],
@@ -190,7 +203,111 @@ class ReportService:
         axis.grid(axis="y", alpha=0.3)
         axis.tick_params(axis="x", rotation=15)
         figure.tight_layout()
-        return self._figure_to_base64(figure)
+        return figure
+
+    def _build_summary_page(self, state: AppState):
+        figure = self._create_document_figure()
+        axis = figure.subplots()
+        axis.axis("off")
+
+        timestamp = datetime.now().strftime("%d.%m.%Y %H:%M")
+        y = 0.95
+        axis.text(0.02, y, "Отчёт по расчёту ИПУР", fontsize=18, weight="bold", va="top")
+        y -= 0.07
+        axis.text(0.02, y, f"Сформировано: {timestamp}", fontsize=10, color="#475569", va="top")
+        y -= 0.08
+
+        if state.current_input and state.current_result:
+            axis.text(0.02, y, f"ИПУР: {state.current_result.value:.3f}", fontsize=13, weight="bold", va="top")
+            y -= 0.05
+            axis.text(0.02, y, state.current_result.interpretation, fontsize=11, va="top", wrap=True)
+            y -= 0.08
+            current_table = axis.table(
+                cellText=[
+                    [
+                        f"{state.current_input.retrospective:.3f}",
+                        f"{state.current_input.statistics:.3f}",
+                        f"{state.current_input.expert:.3f}",
+                        f"{state.current_input.weights.retrospective:.3f}",
+                        f"{state.current_input.weights.statistics:.3f}",
+                        f"{state.current_input.weights.expert:.3f}",
+                    ]
+                ],
+                colLabels=["R", "S", "E", "aR", "aS", "aE"],
+                bbox=[0.02, 0.48, 0.96, 0.16],
+                cellLoc="center",
+            )
+            current_table.auto_set_font_size(False)
+            current_table.set_fontsize(10)
+        else:
+            axis.text(0.02, y, "Текущий расчёт отсутствует.", fontsize=11, va="top")
+
+        axis.text(
+            0.02,
+            0.36,
+            "Следующие страницы содержат таблицы по периодам и сценариям, а также три графика из интерфейса.",
+            fontsize=10,
+            color="#334155",
+            va="top",
+            wrap=True,
+        )
+        figure.tight_layout()
+        return figure
+
+    def _build_table_figure(self, *, title: str, headers: list[str], rows: list[list[object]]):
+        figure = self._create_document_figure()
+        axis = figure.subplots()
+        axis.axis("off")
+        axis.set_title(title, fontsize=16, pad=16)
+
+        if not rows:
+            axis.text(0.5, 0.5, "Нет данных.", ha="center", va="center", fontsize=12)
+            figure.tight_layout()
+            return figure
+
+        table = axis.table(
+            cellText=[[str(cell) for cell in row] for row in rows],
+            colLabels=headers,
+            bbox=[0.02, 0.02, 0.96, 0.9],
+            cellLoc="center",
+        )
+        table.auto_set_font_size(False)
+        table.set_fontsize(8)
+        table.scale(1, 1.35)
+        figure.tight_layout()
+        return figure
+
+    def _period_rows(self, state: AppState) -> list[list[object]]:
+        return [
+            [
+                item.period_name,
+                item.data.retrospective,
+                item.data.statistics,
+                item.data.expert,
+                item.data.weights.retrospective,
+                item.data.weights.statistics,
+                item.data.weights.expert,
+                item.result.value,
+                item.result.interpretation,
+            ]
+            for item in state.periods
+        ]
+
+    def _scenario_rows(self, state: AppState) -> list[list[object]]:
+        return [
+            [
+                item.scenario_name,
+                item.data.retrospective,
+                item.data.statistics,
+                item.data.expert,
+                item.data.weights.retrospective,
+                item.data.weights.statistics,
+                item.data.weights.expert,
+                item.result.value,
+                item.result.interpretation,
+            ]
+            for item in state.scenarios
+        ]
 
     def _style_axis(self, axis) -> None:
         axis.set_ylim(0, 1)
@@ -210,6 +327,11 @@ class ReportService:
         from matplotlib.figure import Figure
 
         return Figure(figsize=(8, 3), dpi=120)
+
+    def _create_document_figure(self):
+        from matplotlib.figure import Figure
+
+        return Figure(figsize=(11.69, 8.27), dpi=120)
 
     def _figure_to_base64(self, figure) -> str:
         buffer = BytesIO()

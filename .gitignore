@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 build/
 dist/
+dist_mac/
 *.spec
 *.html
 *.csv

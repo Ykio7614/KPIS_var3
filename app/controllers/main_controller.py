@@ -33,6 +33,7 @@ class MainController:
                 "save_json": self.save_json,
                 "export_csv": self.export_csv,
                 "export_html": self.export_html,
+                "export_pdf": self.export_pdf,
             }
         )
         self.apply_preset()
@@ -151,10 +152,24 @@ class MainController:
             return
         try:
             self.report_service.export_html(path, self.state)
-        except OSError as error:
+        except (OSError, ModuleNotFoundError) as error:
             self.view.show_error(f"Не удалось сохранить HTML-отчёт: {error}")
             return
         self.view.show_info("HTML-отчёт сохранён.")
+
+    def export_pdf(self) -> None:
+        if self.state.current_input is None or self.state.current_result is None:
+            self.view.show_error("Сначала выполните расчёт.")
+            return
+        path = self.view.ask_save_pdf_path()
+        if not path:
+            return
+        try:
+            self.report_service.export_pdf(path, self.state)
+        except (OSError, ModuleNotFoundError) as error:
+            self.view.show_error(f"Не удалось сохранить PDF-отчёт: {error}")
+            return
+        self.view.show_info("PDF-отчёт сохранён.")
 
     def _build_current_input(self, *, label: str):
         form_data = self.view.get_form_data()
